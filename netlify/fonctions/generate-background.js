@@ -108,8 +108,9 @@ exports.handler = async (event) => {
   try {
     const { connectLambda, getStore } = await import("@netlify/blobs");
     connectLambda(event);
-    const store = getStore({ name: "fiches", consistency: "strong" });
-    const put = (o) => store.setJSON(id, o);
+    const store = getStore("fiches");
+    // 2 clés séparées : l'avancement et le résultat final (le résultat n'est écrit qu'une fois)
+    const put = (o) => store.setJSON(id + (o.status === "running" ? "-step" : "-result"), o);
     try {
       const fiche = await run(b, put);
       await put({ status: "done", fiche });
