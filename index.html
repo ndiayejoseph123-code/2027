@@ -1,111 +1,87 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Générateur de fiches pédagogiques</title>
-<style>
-*{box-sizing:border-box}
-body{font-family:Arial,sans-serif;background:#f3f6fb;margin:0;padding:12px;color:#222}
-.wrap{max-width:900px;margin:auto}
-h1{font-size:20px;color:#2f6fbf}
-.card{background:#fff;border:1px solid #dde4ef;border-radius:8px;padding:14px;margin-bottom:12px}
-label{display:block;font-size:13px;font-weight:bold;margin:10px 0 4px}
-input,select,textarea{width:100%;padding:10px;border:1px solid #c5cfe0;border-radius:6px;font-size:15px}
-textarea{min-height:90px}
-button{background:#4a90e2;color:#fff;border:0;border-radius:6px;padding:12px 16px;font-size:15px;margin-top:12px;cursor:pointer}
-button.sec{background:#6b7a90;margin-left:6px}
-.msg{padding:10px;border-radius:6px;margin-top:10px;font-size:14px}
-.err{background:#fde8e8;color:#a11}
-.warn{background:#fff4d6;color:#7a5a00}
-.ok{background:#e4f6e8;color:#175c2a}
-table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:14px}
-th{background:#4a90e2;color:#fff;text-align:left;padding:10px}
-td{border:1px solid #dde4ef;padding:10px;vertical-align:top;white-space:pre-wrap}
-.sec-title{background:#4a90e2;color:#fff;padding:10px;font-weight:bold}
-.info{border:1px solid #dde4ef;border-top:0;padding:10px;background:#fff}
-.info p{margin:6px 0}
-.verif{background:#fff4d6}
-@media print{.noprint{display:none}body{background:#fff}}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Générateur de Fiche de Leçon - Sécurisé</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @media print {
+            .no-print { display: none; }
+            body { background: white; padding: 0; }
+            .print-container { shadow: none; border: none; padding: 0; }
+        }
+    </style>
 </head>
-<body>
-<div class="wrap">
-<h1 class="noprint">Générateur de fiches pédagogiques</h1>
+<body class="bg-gray-100 p-6">
+    <div class="max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-md print-container">
+        <!-- Formulaire de saisie -->
+        <div class="no-print mb-8 border-b pb-6">
+            <h1 class="text-2xl font-bold mb-4 text-orange-600">Générateur de Fiches de Leçon (Sénégal / CEB)</h1>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <label class="block font-medium text-gray-700">Titre de la leçon</label>
+                    <input type="text" id="titre" placeholder="Ex: Le relief du Sénégal" class="w-full border p-2 rounded mt-1">
+                </div>
+                <div>
+                    <label class="block font-medium text-gray-700">Classe</label>
+                    <input type="text" id="classe" placeholder="Ex: CE2" class="w-full border p-2 rounded mt-1">
+                </div>
+            </div>
 
-<div class="card noprint">
-<label>Titre de la leçon</label>
-<input id="titre" placeholder="ex : Le relief du Sénégal">
-<label>Classe</label>
-<select id="classe"><option>CI</option><option>CP</option><option>CE1</option><option selected>CE2</option><option>CM1</option><option>CM2</option></select>
-<label>Discipline / sous-domaine (facultatif)</label>
-<input id="disc" placeholder="ex : Découverte du monde">
-<label>Durée</label>
-<input id="duree" value="45 minutes">
-<label>Extrait du Guide CEB / programme (facultatif, à coller si la leçon n'est pas dans la base)</label>
-<textarea id="extraits"></textarea>
-<button id="go">Générer la fiche</button>
-<div id="status"></div>
-</div>
+            <button onclick="genererFiche()" id="btnSubmit" class="bg-orange-600 text-white px-6 py-2 rounded hover:bg-orange-700 font-semibold">
+                Générer la Fiche
+            </button>
+            <button onclick="window.print()" class="ml-2 bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 font-semibold">
+                Imprimer / Exporter PDF
+            </button>
+        </div>
 
-<div id="out"></div>
-</div>
+        <!-- Zone d'affichage de la Fiche -->
+        <div id="loading" class="hidden text-center py-8 text-orange-600 font-bold">
+            Génération de la fiche de leçon en cours... Veuillez patienter.
+        </div>
 
-<script>
-const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-const isV = (s) => /À VÉRIFIER/i.test(s || "");
-const cell = (s) => `<td class="${isV(s) ? "verif" : ""}">${esc(s)}</td>`;
+        <div id="ficheResultat" class="space-y-6 hidden">
+            <div class="border-2 border-black p-4">
+                <!-- En-tête -->
+                <div class="grid grid-cols-3 border-b-2 border-black pb-2 mb-4 font-bold text-sm">
+                    <div>Classe: <span id="resClasse" class="font-normal"></span></div>
+                    <div>Sous-domaine: <span id="resSousDomaine" class="font-normal"></span></div>
+                    <div>Durée: <span id="resDuree" class="font-normal"></span></div>
+                </div>
 
-function render(f) {
-  const e = f.entete || {}, i = f.infos || {};
-  const rows = [["DISCIPLINE", i.discipline], ["CB", i.cb], ["PALIER", i.palier], ["OA", i.oa], ["OS", i.os], ["CONTENUS", i.contenus], ["MOYENS_MATERIELS", i.moyens_materiels], ["MOYENS_PEDAGOGIQUES", i.moyens_pedagogiques], ["DOCUMENTATION", i.documentation]].filter(([, v]) => v);
-  let h = `<div id="fiche"><table><tr><th>Classe</th><th>Sous-domaine</th><th>Durée</th></tr><tr>${cell(e.classe)}${cell(e.sous_domaine)}${cell(e.duree)}</tr></table>
-  <div class="sec-title">Informations générales</div><div class="info">`;
-  rows.forEach(([k, v]) => { h += `<p class="${isV(v) ? "verif" : ""}"><b>${k}:</b> ${esc(v)}</p>`; });
-  h += `</div><br><table><tr><th style="width:18%">Étape</th><th>Part du Maître</th><th>Part des Élèves</th></tr>`;
-  (f.etapes || []).forEach((x) => { h += `<tr>${cell(x.etape)}${cell(x.maitre)}${cell(x.eleves)}</tr>`; });
-  h += `</table></div>`;
-  if ((f.a_verifier || []).length) h += `<div class="msg warn noprint"><b>À vérifier avant usage :</b><ul>${f.a_verifier.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>`;
-  if ((f.sources_detail || []).length) h += `<div class="msg ok noprint"><b>Sources utilisées :</b><ul>${f.sources_detail.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>`;
-  h += `<div class="noprint"><button onclick="window.print()">Imprimer / PDF</button><button class="sec" onclick="dl()">Télécharger (Word)</button></div>`;
-  $("out").innerHTML = h;
-}
+                <!-- Informations générales -->
+                <h2 class="font-bold border-b border-black text-lg mb-2">Informations générales</h2>
+                <div class="text-sm space-y-1 mb-6">
+                    <p><strong>DISCIPLINE :</strong> <span id="resDiscipline"></span></p>
+                    <p><strong>CB :</strong> <span id="resCB"></span></p>
+                    <p><strong>PALIER :</strong> <span id="resPalier"></span></p>
+                    <p><strong>OA :</strong> <span id="resOA"></span></p>
+                    <p><strong>OS :</strong> <span id="resOS"></span></p>
+                    <p><strong>CONTENUS :</strong> <span id="resContenus"></span></p>
+                    <p><strong>MOYENS MATÉRIELS :</strong> <span id="resMateriels"></span></p>
+                    <p><strong>DOCUMENTATION :</strong> <span id="resDoc"></span></p>
+                </div>
 
-function dl() {
-  const html = "<html><head><meta charset='utf-8'><style>table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:6px;vertical-align:top}th{background:#4a90e2;color:#fff}</style></head><body>" + $("fiche").innerHTML + "</body></html>";
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob(["﻿", html], { type: "application/msword" }));
-  a.download = "fiche-" + ($("titre").value || "lecon").replace(/[^a-z0-9]+/gi, "-") + ".doc";
-  a.click();
-}
+                <!-- Tableau du déroulement -->
+                <table class="w-full border-collapse border border-black text-sm">
+                    <thead>
+                        <tr class="bg-gray-100 border-b border-black">
+                            <th class="border border-black p-2 w-1/4 text-left">Étape</th>
+                            <th class="border border-black p-2 w-3/8 text-left">Part du Maître</th>
+                            <th class="border border-black p-2 w-3/8 text-left">Part des Élèves</th>
+                        </tr>
+                    </thead>
+                    <tbody id="etapesBody">
+                        <!-- Les étapes générées apparaîtront ici -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-$("go").onclick = async () => {
-  const st = $("status"); $("out").innerHTML = "";
-  if (!$("titre").value.trim()) { st.innerHTML = '<div class="msg err">Écris le titre de la leçon.</div>'; return; }
-  const say = (t) => { st.innerHTML = '<div class="msg warn">' + esc(t) + "</div>"; };
-  $("go").disabled = true;
-  try {
-    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-    const body = { id, titre: $("titre").value.trim(), classe: $("classe").value, discipline: $("disc").value.trim(), duree: $("duree").value.trim(), extraits: $("extraits").value };
-    say("Envoi de la demande…");
-    const r = await fetch("/.netlify/functions/generate-background", { method: "POST", body: JSON.stringify(body) });
-    if (r.status !== 202 && r.status !== 200) throw new Error("Le serveur a refusé la demande (code " + r.status + "). Vérifie que le fichier generate-background.js est bien dans le dossier des fonctions.");
-    const debut = Date.now();
-    while (Date.now() - debut < 300000) {
-      await sleep(3000);
-      let j;
-      try { const rs = await fetch("/.netlify/functions/status?id=" + id); j = await rs.json(); } catch (e) { continue; }
-      if (j.status === "done") { st.innerHTML = ""; render(j.fiche); $("go").disabled = false; return; }
-      if (j.status === "error") throw new Error(j.erreur || "Erreur inconnue.");
-      say((j.step || "En attente du serveur…") + " (" + Math.round((Date.now() - debut) / 1000) + " s)");
-    }
-    throw new Error("Trop long (plus de 5 minutes). Réessaie.");
-  } catch (e) { st.innerHTML = '<div class="msg err">Erreur : ' + esc(e.message) + "</div>"; }
-  $("go").disabled = false;
-};
-</script>
+    <script src="app.js"></script>
 </body>
 </html>
