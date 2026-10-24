@@ -82,14 +82,18 @@ function dl() {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function call(body) {
-  for (let t = 0; t < 2; t++) {
+  for (let t = 0; t < 5; t++) {
     try {
       const r = await fetch("/.netlify/functions/generate", { method: "POST", body: JSON.stringify(body) });
       const txt = await r.text(); let j;
       try { j = JSON.parse(txt); } catch (e) { throw new Error("Le serveur n'a pas répondu correctement (code " + r.status + "). " + txt.slice(0, 120)); }
       if (j.erreur) throw new Error(j.erreur);
       return j;
-    } catch (e) { if (t === 1) throw e; await sleep(1500); }
+    } catch (e) {
+      const limite = /429|rate limit/i.test(e.message);
+      if (t >= (limite ? 4 : 1)) throw e;
+      await sleep(limite ? 3000 * (t + 1) : 1500);
+    }
   }
 }
 
@@ -103,17 +107,18 @@ $("go").onclick = async () => {
     say("1/4 Choix de la démarche…");
     base.ids = (await call({ ...base, step: "models" })).ids;
     say("2/4 Lecture des sources…");
-    const [ph, inf] = await Promise.all([call({ ...base, step: "phases" }), call({ ...base, step: "infos" })]);
+    const ph = await call({ ...base, step: "phases" }); await sleep(1100);
+    const inf = await call({ ...base, step: "infos" });
     const n = ph.phases.length, etapes = new Array(n); let next = 0, done = 0;
     say("3/4 Rédaction des phases (0/" + n + ")…");
     const worker = async () => {
       while (next < n) {
         const i = next++;
         etapes[i] = await call({ ...base, step: "phase", phase: ph.phases[i], infos: inf.infos });
-        done++; say("3/4 Rédaction des phases (" + done + "/" + n + ")…");
+        await sleep(1100); done++; say("3/4 Rédaction des phases (" + done + "/" + n + ")…");
       }
     };
-    await Promise.all([worker(), worker(), worker()]);
+    await worker();
     const verif = [...new Set([...(inf.a_verifier || []), ...etapes.flatMap((e) => e.a_verifier || [])].filter(Boolean))];
     st.innerHTML = "";
     render({ entete: inf.entete, infos: inf.infos, etapes, a_verifier: verif, sources_detail: inf.sources_detail });
