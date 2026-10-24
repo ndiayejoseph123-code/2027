@@ -81,21 +81,6 @@ function dl() {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function call(body) {
-  for (let t = 0; t < 5; t++) {
-    try {
-      const r = await fetch("/.netlify/functions/generate", { method: "POST", body: JSON.stringify(body) });
-      const txt = await r.text(); let j;
-      try { j = JSON.parse(txt); } catch (e) { throw new Error("Le serveur n'a pas répondu correctement (code " + r.status + "). " + txt.slice(0, 120)); }
-      if (j.erreur) throw new Error(j.erreur);
-      return j;
-    } catch (e) {
-      const limite = /429|rate limit/i.test(e.message);
-      if (t >= (limite ? 4 : 1)) throw e;
-      await sleep(limite ? 3000 * (t + 1) : 1500);
-    }
-  }
-}
 
 $("go").onclick = async () => {
   const st = $("status"); $("out").innerHTML = "";
@@ -103,25 +88,21 @@ $("go").onclick = async () => {
   const say = (t) => { st.innerHTML = '<div class="msg warn">' + esc(t) + "</div>"; };
   $("go").disabled = true;
   try {
-    const base = { titre: $("titre").value.trim(), classe: $("classe").value, discipline: $("disc").value.trim(), duree: $("duree").value.trim(), extraits: $("extraits").value };
-    say("1/4 Choix de la démarche…");
-    base.ids = (await call({ ...base, step: "models" })).ids;
-    say("2/4 Lecture des sources…");
-    const ph = await call({ ...base, step: "phases" }); await sleep(1100);
-    const inf = await call({ ...base, step: "infos" });
-    const n = ph.phases.length, etapes = new Array(n); let next = 0, done = 0;
-    say("3/4 Rédaction des phases (0/" + n + ")…");
-    const worker = async () => {
-      while (next < n) {
-        const i = next++;
-        etapes[i] = await call({ ...base, step: "phase", phase: ph.phases[i], infos: inf.infos });
-        await sleep(1100); done++; say("3/4 Rédaction des phases (" + done + "/" + n + ")…");
-      }
-    };
-    await worker();
-    const verif = [...new Set([...(inf.a_verifier || []), ...etapes.flatMap((e) => e.a_verifier || [])].filter(Boolean))];
-    st.innerHTML = "";
-    render({ entete: inf.entete, infos: inf.infos, etapes, a_verifier: verif, sources_detail: inf.sources_detail });
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    const body = { id, titre: $("titre").value.trim(), classe: $("classe").value, discipline: $("disc").value.trim(), duree: $("duree").value.trim(), extraits: $("extraits").value };
+    say("Envoi de la demande…");
+    const r = await fetch("/.netlify/functions/generate-background", { method: "POST", body: JSON.stringify(body) });
+    if (r.status !== 202 && r.status !== 200) throw new Error("Le serveur a refusé la demande (code " + r.status + "). Vérifie que le fichier generate-background.js est bien dans le dossier des fonctions.");
+    const debut = Date.now();
+    while (Date.now() - debut < 300000) {
+      await sleep(3000);
+      let j;
+      try { const rs = await fetch("/.netlify/functions/status?id=" + id); j = await rs.json(); } catch (e) { continue; }
+      if (j.status === "done") { st.innerHTML = ""; render(j.fiche); $("go").disabled = false; return; }
+      if (j.status === "error") throw new Error(j.erreur || "Erreur inconnue.");
+      say((j.step || "En attente du serveur…") + " (" + Math.round((Date.now() - debut) / 1000) + " s)");
+    }
+    throw new Error("Trop long (plus de 5 minutes). Réessaie.");
   } catch (e) { st.innerHTML = '<div class="msg err">Erreur : ' + esc(e.message) + "</div>"; }
   $("go").disabled = false;
 };
