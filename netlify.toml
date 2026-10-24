@@ -1,0 +1,6 @@
+[build]
+  functions = "netlify/functions"
+  publish = "."
+
+[functions]
+  included_files = ["corpus.js", "miroir.json"]
