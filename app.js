@@ -19,13 +19,13 @@ async function genererFiche() {
             body: JSON.stringify({ titre, classe })
         });
 
+        const data = await response.json();
+        
         if (!response.ok) {
-            throw new Error("Erreur lors de la communication avec le serveur.");
+            throw new Error(data.error || "Erreur lors de la communication avec le serveur.");
         }
 
-        const data = await response.json();
         let content = data.choices[0].message.content;
-        
         content = content.replace(/```json/g, '').replace(/```/g, '').trim();
         const fiche = JSON.parse(content);
 
@@ -59,7 +59,7 @@ async function genererFiche() {
 
     } catch (error) {
         console.error(error);
-        alert("Erreur lors de la génération de la fiche. Veuillez réessayer.");
+        alert("Erreur : " + error.message);
         document.getElementById('loading').classList.add('hidden');
     }
 }
