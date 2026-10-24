@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Générateur de fiches pédagogiques</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:Arial,sans-serif;background:#f3f6fb;margin:0;padding:12px;color:#222}
+.wrap{max-width:900px;margin:auto}
+h1{font-size:20px;color:#2f6fbf}
+.card{background:#fff;border:1px solid #dde4ef;border-radius:8px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:13px;font-weight:bold;margin:10px 0 4px}
+input,select,textarea{width:100%;padding:10px;border:1px solid #c5cfe0;border-radius:6px;font-size:15px}
+textarea{min-height:90px}
+button{background:#4a90e2;color:#fff;border:0;border-radius:6px;padding:12px 16px;font-size:15px;margin-top:12px;cursor:pointer}
+button.sec{background:#6b7a90;margin-left:6px}
+.msg{padding:10px;border-radius:6px;margin-top:10px;font-size:14px}
+.err{background:#fde8e8;color:#a11}
+.warn{background:#fff4d6;color:#7a5a00}
+.ok{background:#e4f6e8;color:#175c2a}
+table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:14px}
+th{background:#4a90e2;color:#fff;text-align:left;padding:10px}
+td{border:1px solid #dde4ef;padding:10px;vertical-align:top;white-space:pre-wrap}
+.sec-title{background:#4a90e2;color:#fff;padding:10px;font-weight:bold}
+.info{border:1px solid #dde4ef;border-top:0;padding:10px;background:#fff}
+.info p{margin:6px 0}
+.verif{background:#fff4d6}
+@media print{.noprint{display:none}body{background:#fff}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1 class="noprint">Générateur de fiches pédagogiques</h1>
+
+<div class="card noprint">
+<label>Titre de la leçon</label>
+<input id="titre" placeholder="ex : Le relief du Sénégal">
+<label>Classe</label>
+<select id="classe"><option>CI</option><option>CP</option><option>CE1</option><option selected>CE2</option><option>CM1</option><option>CM2</option></select>
+<label>Discipline / sous-domaine (facultatif)</label>
+<input id="disc" placeholder="ex : Découverte du monde">
+<label>Durée</label>
+<input id="duree" value="45 minutes">
+<label>Extrait du Guide CEB / programme (facultatif, à coller si la leçon n'est pas dans la base)</label>
+<textarea id="extraits"></textarea>
+<button id="go">Générer la fiche</button>
+<div id="status"></div>
+</div>
+
+<div id="out"></div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const isV = (s) => /À VÉRIFIER/i.test(s || "");
+const cell = (s) => `<td class="${isV(s) ? "verif" : ""}">${esc(s)}</td>`;
+
+function render(f) {
+  const e = f.entete || {}, i = f.infos || {};
+  const rows = [["DISCIPLINE", i.discipline], ["CB", i.cb], ["PALIER", i.palier], ["OA", i.oa], ["OS", i.os], ["CONTENUS", i.contenus], ["MOYENS_MATERIELS", i.moyens_materiels], ["MOYENS_PEDAGOGIQUES", i.moyens_pedagogiques], ["DOCUMENTATION", i.documentation]].filter(([, v]) => v);
+  let h = `<div id="fiche"><table><tr><th>Classe</th><th>Sous-domaine</th><th>Durée</th></tr><tr>${cell(e.classe)}${cell(e.sous_domaine)}${cell(e.duree)}</tr></table>
+  <div class="sec-title">Informations générales</div><div class="info">`;
+  rows.forEach(([k, v]) => { h += `<p class="${isV(v) ? "verif" : ""}"><b>${k}:</b> ${esc(v)}</p>`; });
+  h += `</div><br><table><tr><th style="width:18%">Étape</th><th>Part du Maître</th><th>Part des Élèves</th></tr>`;
+  (f.etapes || []).forEach((x) => { h += `<tr>${cell(x.etape)}${cell(x.maitre)}${cell(x.eleves)}</tr>`; });
+  h += `</table></div>`;
+  if ((f.a_verifier || []).length) h += `<div class="msg warn noprint"><b>À vérifier avant usage :</b><ul>${f.a_verifier.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>`;
+  if ((f.sources_detail || []).length) h += `<div class="msg ok noprint"><b>Sources utilisées :</b><ul>${f.sources_detail.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>`;
+  h += `<div class="noprint"><button onclick="window.print()">Imprimer / PDF</button><button class="sec" onclick="dl()">Télécharger (Word)</button></div>`;
+  $("out").innerHTML = h;
+}
+
+function dl() {
+  const html = "<html><head><meta charset='utf-8'><style>table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:6px;vertical-align:top}th{background:#4a90e2;color:#fff}</style></head><body>" + $("fiche").innerHTML + "</body></html>";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["﻿", html], { type: "application/msword" }));
+  a.download = "fiche-" + ($("titre").value || "lecon").replace(/[^a-z0-9]+/gi, "-") + ".doc";
+  a.click();
+}
+
+$("go").onclick = async () => {
+  const st = $("status"); $("out").innerHTML = "";
+  if (!$("titre").value.trim()) { st.innerHTML = '<div class="msg err">Écris le titre de la leçon.</div>'; return; }
+  st.innerHTML = '<div class="msg warn">Génération en cours…</div>'; $("go").disabled = true;
+  try {
+    const r = await fetch("/.netlify/functions/generate", { method: "POST", body: JSON.stringify({ titre: $("titre").value.trim(), classe: $("classe").value, discipline: $("disc").value.trim(), duree: $("duree").value.trim(), extraits: $("extraits").value }) });
+    const f = await r.json();
+    if (f.erreur) st.innerHTML = '<div class="msg err">' + esc(f.erreur) + "</div>";
+    else if (f.non_trouve) st.innerHTML = '<div class="msg warn">' + esc(f.message) + "</div>";
+    else { st.innerHTML = ""; render(f); }
+  } catch (e) { st.innerHTML = '<div class="msg err">Erreur : ' + esc(e.message) + "</div>"; }
+  $("go").disabled = false;
+};
+</script>
+</body>
+</html>
